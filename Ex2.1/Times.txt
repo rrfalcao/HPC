@@ -1,0 +1,19 @@
+No optimisation
+real    0m4.887s
+user    0m4.678s
+sys     0m0.209s
+
+O1  
+real    0m2.913s
+user    0m2.407s
+sys     0m0.505s
+
+O2
+real    0m2.859s
+user    0m2.390s
+sys     0m0.469s
+
+O3
+real    0m2.561s
+user    0m2.349s
+sys     0m0.212s
