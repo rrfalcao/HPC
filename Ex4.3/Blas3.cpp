@@ -14,11 +14,11 @@ extern "C" {
         const double* A, const int& lda,
         const double* B, const int& ldB,
         const double& beta, 
-        const double* C, const int& ldC);
+        double* C, const int& ldC);
 
     void F77NAME(dcopy) (const int& n,
         const double *x, const int& incx,
-        const double *y, const int& incy);
+        double *y, const int& incy);
 
     double F77NAME(ddot) (const int& n,
         const double *x, const int& incx,
@@ -27,7 +27,7 @@ extern "C" {
     double F77NAME(daxpy) (const int& n,
         const double& alpha,
         const double *x, const int& incx,
-        const double *y, const int& incy);
+        double *y, const int& incy);
 
     void F77NAME(dscal) (const int& n,
         const double& alpha,

@@ -27,21 +27,22 @@ extern "C" {
         double *x, const int& incx);
 
     
-    void F77NAME(dsymv) (const char& uplo, 
-    const int& n, 
-    const double& alpha, 
-    const double* A, const int& lda,
-    const double* x, const int& incx, 
-    const double& beta, double* y, const int& incy);
+    void F77NAME(dspmv) (const char& uplo, 
+        const int& n, 
+        const double& alpha, 
+        const double* AP,  // Packed storage matrix
+        const double* x, const int& incx, 
+        const double& beta, 
+        double* y, const int& incy);
 }
 
-void conj_grad(double* A,double* x, double *b,int n,double tol, int max_iter){
+void conj_grad_packed(double* A,double* x, double *b,int n,double tol, int max_iter){
     double alpha, beta, rcur, rnext;
     double* r = new double[n];
     double* p = new double[n];
     double* Ap = new double[n];
 
-    F77NAME(dsymv)('L',n,1.0,A,n,x,1,0.0,Ap,1); 
+    F77NAME(dspmv)('U',n,1.0,A,x,1,0.0,Ap,1); 
     F77NAME(dcopy) (n,b,1,r,1); 
     F77NAME(daxpy) (n,-1.0,Ap,1,r,1); // r0 = b - Ax0
     F77NAME(dcopy) (n,r,1,p,1); // p0 = r0
@@ -49,7 +50,7 @@ void conj_grad(double* A,double* x, double *b,int n,double tol, int max_iter){
     for (int i=0; i<max_iter;i++){
 
         rcur=F77NAME(ddot) (n,r,1,r,1); 
-        F77NAME(dsymv)('L',n,1.0,A,n,p,1,0.0,Ap,1);
+        F77NAME(dspmv)('U',n,1.0,A,p,1,0.0,Ap,1);
         alpha=rcur/(F77NAME(ddot) (n,p,1,Ap,1)); // alpha = ((rk)^T*(rk))/((pk)^T*A(pk))
 
         F77NAME(daxpy) (n,alpha,p,1,x,1); // xk+1 = xk + alphak*pk
@@ -97,7 +98,7 @@ void writevec (double* X,int N){
 
 
 int main(){
-    const int N=10;
+    const int N=61;
     double* A=new double[N*(N+1)/2];
     double* x=new double[N];
     double* b=new double[N];
@@ -115,9 +116,9 @@ int main(){
     } 
     
 
-    F77NAME(dsymv)('L',N,1.0,A,N,x,1,0.0,b,1);
+    F77NAME(dspmv)('U',N,1.0,A,x,1,0.0,b,1);
 
-    conj_grad(A,y,b,N,0.000001,1000000);
+    conj_grad_packed(A,y,b,N,0.000001,100000);
     std::cout << "Expected x:\n";
     writevec(x,N);
 
