@@ -23,8 +23,8 @@ extern "C"
                          const double& beta, 
                          double* y, const int& incy);
 }
-void prep_banded_A(double *A, double nu, double Nx, int k)
-{
+    void prep_banded_A(double *A, double nu, double Nx, int k)
+    {
     double altnu = 1 - 2 * nu;
 
     for (int i = 0; i < Nx - 2; ++i)
