@@ -35,3 +35,7 @@ int main(int argc, char * argv[]){
     MPI_Finalize();   
     return 0;
     }
+    
+
+    000000000000000000000000000
+    

@@ -1,6 +1,6 @@
 #include <iostream>
 #include <cmath>
-
+#include "fibo.h"
 using namespace std;
 int fibo(int n){
     if (n==0){
@@ -12,8 +12,4 @@ int fibo(int n){
     else{
         return fibo(n-1)+fibo(n-2);
     }
-}
-int main(){
-    int n=27;
-    cout<<fibo(n)<<endl;
 }

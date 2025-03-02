@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <boost/timer/timer.hpp>
 using namespace std;
 
 #define F77NAME(x) x##_
@@ -52,13 +53,15 @@ extern "C"
     void time_integrate(double *u, double *A, double Nt, int n,int k)
     {
         double* u_new = new double[n];
-        
+        boost::timer::cpu_timer timer;
         for (int i = 0; i < Nt; ++i)
         {
             
             F77NAME(dsbmv)('U', n, k, 1.0, A, k + 1, u, 1, 0.0, u_new, 1);
             F77NAME(dcopy)(n, u_new, 1, u, 1);
         }
+        timer.stop();
+        std::cout << "Time taken for time integration: " << timer.format() << std::endl;
 
         delete[] u_new;
     }

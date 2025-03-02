@@ -3,70 +3,54 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <boost/timer/timer.hpp>
 using namespace std;
 
 #define F77NAME(x) x##_
 
 extern "C"
 {
-    void F77NAME(dcopy) (const int& n,
-        const double *x, const int& incx,
-        double *y, const int& incy);
-
-    void F77NAME(dgbmv) (const char& trans, 
-                         const int& m,
-                         const int& n, 
-                         const int& kl,  
-                         const int& ku, // Bandwidth
-                         const double& alpha, 
-                         const double* A, const int& lda, // Banded matrix (leading dimension)
-                         const double* x, const int& incx, 
-                         const double& beta, 
-                         double* y, const int& incy);
-    void F77NAME(dsbev)(char* jobz, char* uplo, int* n, 
-        int kd, double* ab, int* ldab, double* w, 
-        double* z, int ldz, double* work, int* info);
-    void F77NAME(dpbtrf)(char* uplo, int* n, int* kd, double* ab, int* ldab, int* info);
+    
+        // LAPACK routine for banded matrix eigenvalue calculation
+    void F77NAME(dsbev)(const char& jobz, const char& ul, const int& n,
+                            const int& kd,
+                            double* ab, const int& ldab, double* w,
+                            double* z,  const int& ldz,
+                            double* work, int* info );
+        // LAPACK routine for banded matrix factorisation
+     void F77NAME(dgbtrf)(const int& M, const int& N, const int& KL,
+                     const int& KU, double* A, const int& lda,
+                     int* ipiv, int* info);
+        // LAPACK routine for banded matrix solve
+     void F77NAME(dgbtrs)(const char& TRANS, const int& N, const int& KL,
+                     const int& KU, const int& NRHS,
+                     const double* A, const int& lda,
+                     int* ipiv, double* B, const int& ldb, int* info);
 }
-    void prep_banded_A(double *A, double nu, double Nx, int kl, int ku)
+    void prep_banded_A(double *A, double nu, double Nx, int lda)
     {
-        int lda = kl + ku + 1;
+        
     double altnu = 1 - 2 * nu;
 
-    for (int i = 0; i < Nx - 2; ++i)
-    {   
-        A[i*lda] = nu;
-        A[i*lda + 1] = altnu;
-        A[i*lda + 2] = nu;
-        
+    for (int i = 0; i < Nx; ++i) {
+        A[i*lda+1] = nu;
+        A[i*lda+2] = altnu;
+        A[i*lda+3] = nu;
     }}
 
-    void prep_u(double *u, double dx, int Nx, double nu, double u0, double u1)
+    void prep_u(double *u, double dx, int Nx, double nu)
     {
         double x_i = 0.0;
-        for (int i = 0; i < Nx - 2; ++i)
+        for (int i = 0; i < Nx; ++i)
         {
 
             x_i = (i + 1) * dx;
             u[i] = sin(M_PI * x_i);
         }
-        u[0] -= u0 * nu;
-        u[Nx - 3] -= u1 * nu;
-    }
-
-    void time_integrate(double *u, double *A, double Nt, int n,int kl,int ku)
-    {
-        double* u_new = new double[n];
         
-        for (int i = 0; i < Nt; ++i)
-        {
-            
-            F77NAME(dgbmv)('N', n,n, kl,ku, 1.0, A, kl+ku+1, u, 1, 0.0, u_new, 1);
-            F77NAME(dcopy)(n, u_new, 1, u, 1);
-        }
-
-        delete[] u_new;
     }
+
+    
     void writevec(double *X, int N)
     {
         for (int i = 0; i < N; ++i)
@@ -77,13 +61,15 @@ extern "C"
 
         std::cout << endl;
     }
-    void eig_calc(double *A, double *u, int Nx,char uplo, int ldab)
+    void eig_calc(double *A, int Nx, int ldab)
     {
         char jobz = 'N';  // Eigenvalues only
+        char uplo = 'L';  // Upper triangular
         int info;
         double* w = new double[Nx];  // Array for eigenvalues
-        double* work = new double[3 * (Nx)];
-        F77NAME(dsbev)(&jobz, &uplo, &Nx, 1, A, &ldab, w, u, 1, work, &info);
+        double* work = new double[3 * Nx];
+        double* z=0;
+        F77NAME(dsbev)(jobz, uplo, Nx, 1, A+2, ldab, w, z, 1, work, &info);
         if (info != 0)
         {
             std::cerr << "Error computing eigenvalues, info = " << info << std::endl;
@@ -99,61 +85,70 @@ extern "C"
         }
         delete[] w;
         delete[] work;
+        delete[] z;
     }
-    void PACK_integrate(double* A,int n,int kd, int ldab, char uplo){
+    void PACK_integrate(double* A,double* u,int n,int kl,int ku, int lda, int Nt){
         int info;
-        F77NAME(dpbtrf)(&uplo, &n, &kd, A, &ldab, &info);
-        if (info != 0)
-        {
-            std::cerr << "Error computing eigenvalues, info = " << info << std::endl;
+        boost::timer::cpu_timer timer;
+        int* ipiv = new int[n]();
+        F77NAME(dgbtrf)(n, n, kl, ku, A, lda, ipiv, &info);
+        if (info) {
+            cout << "Error in DGBTRF: " << info << endl;
+           
         }
 
-    }
-    void print_banded_matrix(double* A, int n, int kl, int ku)
-    {
-        int lda = kl + ku + 1; // Number of rows in the banded matrix
-        std::cout << "Banded Matrix (Column-major order):" << std::endl;
-
-        for (int i = 0; i < lda; ++i)
-        {
-            for (int j = 0; j < n; ++j)
-            {
-                // Print the banded matrix in memory layout
-                std::cout << A[j * lda + i] << "\t";
+        // Time integrate
+        for (int t = 0; t < Nt; t++) {
+            F77NAME(dgbtrs)('N', n, kl, ku, 1, A, lda, ipiv, u, n, &info);
+            if (info) {
+                cout << "Error in DGBTRS: " << info << endl;
             }
-            std::cout << std::endl;
         }
-        std::cout << std::endl;
+        timer.stop();
+        std::cout << "Time taken for time integration: " << timer.format() << std::endl;
+        delete[] ipiv;
+
+
     }
+    
 
     int main()
     {
-        int Nx=20;
-        int Nt=100;
-        double dt=0.001;
-        int kl = 1;
-        int ku = 1;
-        double gamma0 = 0.0;
-        double gamma1 = 0.0;
-
+        const int Nx=20;
+        const int kl = 1;
+        const int ku = 1;
+        const int lda = 2*kl + ku + 1;
+        double* A = new double[lda*Nx]();
+        double* w = new double[Nx]();
+        double* z = 0;
+        double* work = new double[3*Nx - 2]();
+        int info = 0;
+        double nu = 0.4;
+        double Nt = 100;
+        const double dx = 1.0/(Nx-1);
+        double* u = new double[Nx]();
         
-
-        double *A = new double[(kl +ku + 1) * (Nx - 2)];
-        double *u = new double[Nx - 2];
-        double dx = 1.0 / (Nx - 1);
-        double nu = dt / (dx * dx);
-        char uplo = 'U';
-        // int ldab = k + 1;
+            
+        prep_banded_A(A, nu, Nx, lda);
+        prep_u(u, dx, Nx, nu);
+        eig_calc(A, Nx,lda);
         
-      
-        
-        prep_banded_A(A, nu, Nx, kl,ku);
-        prep_u(u, dx, Nx, nu, gamma0, gamma1);
+        // Modify A to represent the implicit operator (note change of signs)
+        for (int i = 0; i < Nx; ++i) {
+            A[i*lda+1] = -nu;
+            A[i*lda+2] = 1.0 + 2.0*nu;
+            A[i*lda+3] = -nu;
+        }
 
-        // eig_calc(A, u, Nx-2, uplo,kl+ku+1);
-        // PACK_integrate(A,Nx-2,k,ldab,uplo);
-        print_banded_matrix(A, Nx - 2, kl, ku);
-        time_integrate(u, A, Nt, Nx - 2,kl,ku);
-        writevec(u,Nx-2);
+        // To impose Dirichlet boundary conditions, we zero the off-diagonal entries
+        A[lda+1] = 0.0;
+        A[(Nx-2)*lda+3] = 0.0;
+        
+        
+        PACK_integrate(A,u,Nx,kl,ku,lda,Nt);
+        writevec(u,Nx);
+        
+        
+        
     }
     
